@@ -1,0 +1,120 @@
+import pandas as pd
+import google.generativeai as genai
+import time
+import random
+import json
+import environ
+
+env = environ.Env()
+environ.Env.read_env()
+
+OPENAI_API_KEY = env("OPENAI_API_KEY")
+GOOGLE_API_KEY = env("GOOGLE_API_KEY")
+
+import json
+
+def process_file(file_path, description):
+    try:
+        df = read_csv_data(file_path)
+        data_text = dataframe_to_text(df)
+        response = send_data_to_gemini(data_text, description)
+        return response
+    except Exception as e:
+        return structure_response(None, f"Error processing file: {str(e)}")
+
+def structure_response(story, error=None):
+    response = {
+        "success": error is None,
+        "story": story if error is None else None,
+        "error": str(error) if error else None
+    }
+    return json.dumps(response, indent=2)
+
+def read_csv_data(file_path, sample_size=1000):
+    print("Reading and sampling csv file....")
+    df = pd.read_csv(file_path)
+    return df.sample(min(sample_size, len(df)))
+
+def dataframe_to_text(df):
+    print("Converting pandas dataframe to text....")
+    return df.to_csv(index=False)
+
+def send_data_to_gemini(data, description, model_name="gemini-1.5-pro"):
+    print("Sending data to Gemini....")
+
+    genai.configure(api_key=GOOGLE_API_KEY)
+
+    system_prompt = """You are an expert data analyst who fully understands how to present data in story form
+    that is easier for users to understand their data. Your role is to create a compelling story based on
+     the data that is provided to highlight key aspects and components from the data.
+     In addition, you will highlight any identifiable trends you recognize from the data and present it
+     in a relatable story that the user can relate to.\n\n
+     Your task is to analyze the data and provide an aggregated view of the data in a compelling story form.
+     Structure your response in the following JSON format:
+     {
+         "title": "A catchy title for your analysis",
+         "summary": "A brief summary of the key findings",
+         "sections": [
+             {
+                 "heading": "Section heading",
+                 "content": "Section content"
+             },
+             ...
+         ],
+         "conclusion": "A concluding paragraph"
+     }"""
+
+    generation_config = {
+        "temperature": 1,
+        "top_p": 0.95,
+        "top_k": 64,
+        "max_output_tokens": 8192,
+    }
+
+    model = genai.GenerativeModel(model_name=model_name, generation_config=generation_config)
+
+    prompt = f"Analyze the following CSV data:\n```\nDescription of the data: {description}\n```\n{data}\n```\n{system_prompt}"
+
+    try:
+        print("Sending the prompt to the model...")
+        chat = model.start_chat(history=[])
+        response = chat.send_message(prompt, stream=False)
+        full_response = response.text
+        print("Response received.")
+        return structure_response(full_response)
+
+    except genai.types.generation_types.BlockedPromptException as e:
+        return structure_response(None, f"Blocked prompt: {e}")
+    except Exception as e:
+        return structure_response(None, f"An error occurred: {str(e)}")
+
+def main():
+    print("Simulating API calls...")
+
+    # Simulate first API call
+    file_path1 = "./data/50_Startups.csv"
+    description1 = """This dataset contains financial information about 50 startup companies.
+    The columns include R&D Spend, Administration, Marketing Spend, State, Profit"""
+    
+    print("\nAPI Call 1:")
+    response1 = process_file(file_path1, description1)
+    print(response1)
+
+    # Simulate second API call with a different file
+    file_path2 = "./data/Churn_Modelling_Small.csv"
+    description2 = """This dataset contains information about bank customers and whether they have churned (left the bank) or not. 
+    The columns include customer ID, surname, credit score, geography, gender, age, tenure, balance, number of products, 
+    whether they have a credit card, whether they are an active member, estimated salary, and whether they churned."""
+    
+    print("\nAPI Call 2:")
+    response2 = process_file(file_path2, description2)
+    print(response2)
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()
+
+if __name__ == "__main__":
+    main()                    
