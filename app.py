@@ -51,6 +51,13 @@ class AnalysisResponse(BaseModel):
     sections: List[Section]
     conclusion: str
 
+# define Gemini generative AI model parameters
+    # generation_config = {
+    #     "temperature": 1,
+    #     "top_p": 0.95,
+    #     "top_k": 64
+    # }
+
 # Create instructor client
 client = instructor.from_gemini(
     client=genai.GenerativeModel(model_name="gemini-1.5-pro"),
