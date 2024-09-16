@@ -80,38 +80,47 @@ def read_csv_data(file: UploadFile, sample_size=1000):
 def dataframe_to_text(df: pd.DataFrame):
     return df.to_csv(index=False)
 
-async def send_data_to_gemini(data: str, description: str, max_retries=3):
-    system_prompt = """You are an expert data analyst who fully understands how to present data in story form
-    that is easier for users to understand their data. Your role is to create a compelling story based on
-    the data that is provided to highlight key aspects and components from the data.
-    In addition, you will highlight any identifiable trends you recognize from the data and present it
-    in a relatable story that the user can relate to.
+async def send_data_to_gemini(data: str, description: str, creativity_level: int, max_retries=3):
+    # print the incoming Creativity level
+    print("Incoming Creativity level: ", creativity_level)
 
-    Your task is to analyze the data and provide an aggregated view of the data in a compelling story form.
+    # Adjust the system prompt based on creativity level
+    if creativity_level <= 30:
+        tone = "formal and business-like"
+    elif 31 <= creativity_level <= 60:
+        tone = "conversational and friendly"
+    elif 61 <= creativity_level <= 90:
+        tone = "poetic, similar to the style of Shakespeare"
+    elif 91 <= creativity_level <= 100:
+        tone = "playful and pirate-like"
+    else:
+        raise ValueError("Creativity level must be between 0 and 100")
+
+    system_prompt = f"""You are an expert data analyst with the ability to present data in various styles of speech.
+    Your task is to create a compelling story based on the data that is provided, using a {tone} tone.
     Structure your response in the following JSON format:
-    {
+    {{
         "title": "A catchy title for your analysis",
         "summary": "A brief summary of the key findings",
         "sections": [
-            {
+            {{
                 "heading": "Section heading",
                 "content": "Section content"
-            },
+            }},
             ...
         ],
         "conclusion": "A concluding paragraph"
-    }"""
+    }}"""
 
     prompt = f"Analyze the following CSV data:\n```\nDescription of the data: {description}\n```\n{data}\n```\n{system_prompt}"
 
+    # Gemini API call (retry logic included)
     initial_delay = 2
     for attempt in range(max_retries):
         try:
-            logger.info(f"Sending the prompt to the model (attempt {attempt + 1})...")
+            logger.info(f"Sending the prompt to the model with creativity level {creativity_level} (attempt {attempt + 1})...")
             response = client.messages.create(
-                messages=[
-                    {"role": "user", "content": prompt}
-                ],
+                messages=[{"role": "user", "content": prompt}],
                 response_model=AnalysisResponse
             )
             logger.info("Response completed.")
@@ -131,9 +140,10 @@ async def send_data_to_gemini(data: str, description: str, max_retries=3):
             else:
                 logger.error("Max retries reached. Exiting.")
                 raise HTTPException(status_code=500, detail=f"Error in Gemini API: {str(e)}")
+            
 
 @app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_csv(file: UploadFile = File(...), description: str = Form(...)):
+async def analyze_csv(file: UploadFile = File(...), description: str = Form(...), creativity_level: int = Form(...)):
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
@@ -141,7 +151,7 @@ async def analyze_csv(file: UploadFile = File(...), description: str = Form(...)
         try:
             df = read_csv_data(file, sample_size=1000)
             data = dataframe_to_text(df)
-            response = await send_data_to_gemini(data, description)
+            response = await send_data_to_gemini(data, description, creativity_level)
             return response
         except instructor.exceptions.BlockedPromptException as e:
             logger.error(f"Blocked prompt: {e}")
