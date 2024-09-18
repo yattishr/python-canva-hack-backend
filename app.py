@@ -51,13 +51,6 @@ class AnalysisResponse(BaseModel):
     sections: List[Section]
     conclusion: str
 
-# define Gemini generative AI model parameters
-    # generation_config = {
-    #     "temperature": 1,
-    #     "top_p": 0.95,
-    #     "top_k": 64
-    # }
-
 # Create instructor client
 client = instructor.from_gemini(
     client=genai.GenerativeModel(model_name="gemini-1.5-pro"),
@@ -143,7 +136,7 @@ async def send_data_to_gemini(data: str, description: str, creativity_level: int
             
 
 @app.post("/analyze", response_model=AnalysisResponse)
-async def analyze_csv(file: UploadFile = File(...), description: str = Form(...), creativity_level: int = Form(...)):
+async def analyze_csv(file: UploadFile = File(...), description: str = Form(...), creativity_level: int = Form(...)):    
     if not file.filename.endswith('.csv'):
         raise HTTPException(status_code=400, detail="Only CSV files are allowed")
 
@@ -151,6 +144,7 @@ async def analyze_csv(file: UploadFile = File(...), description: str = Form(...)
         try:
             df = read_csv_data(file, sample_size=1000)
             data = dataframe_to_text(df)
+            print("Logging incoming creativity_level: ", creativity_level)
             response = await send_data_to_gemini(data, description, creativity_level)
             return response
         except instructor.exceptions.BlockedPromptException as e:
